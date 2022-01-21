@@ -75,8 +75,7 @@ if(scrape_data){
     as.numeric()
   
   for(page in pages[1]:pages[2]){
-    # for(page in 30:50){
-    
+
     # create link for specific web page
     link <- paste0(base_link, page)
     
@@ -106,23 +105,12 @@ if(scrape_data){
   
 } else {
   
-  # download data "pre-scraped" by me from github
-  # url <- "github.com/bt-koch/test/blob/master/scraped_data.rds"
-  # temp <- tempfile()
-  # download.file(url, temp)
-  # dat <- load(temp)
-  # unlink(temp)
-  
-  url <- "https://raw.githubusercontent.com/bt-koch/test/master/scraped-data.csv"
+  # download "pre-scraped" data from github
+  url <- "https://raw.githubusercontent.com/bt-koch/ML-project-classic-trader/main/scraped-data.csv"
   data <- read.csv(url, check.names = F)
-  
+  rm(url)
 }
 
-
-test <- readRDS("scraped-data.rds")
-# temporary:
-# saveRDS(data, "scraped-data.rds")
-# write.csv(data, "scraped-data.csv", row.names = F)
 
 
 # -----------------------------------------------------------------------------.
