@@ -1,4 +1,4 @@
-# ML-project-classic-trader
+# Machine Learning Project: Classic Trader
 
 ## subt
 
