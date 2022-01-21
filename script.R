@@ -165,7 +165,7 @@ data <- data %>%
   )
 
 # missing data -> group by manufacturer+model and predict whats most expected
-
+# test
 
 # -----------------------------------------------------------------------------.
 # 1.3 Create train, test and validation set ----
