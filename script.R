@@ -10,7 +10,7 @@ rm(list=ls()); gc()
 # user input:
 # set TRUE if you want to scrape data (takes some time)
 # set FALSE if you want to download already scraped data from github
-scrape_data <- T
+scrape_data <- F
 
 # packages used
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")

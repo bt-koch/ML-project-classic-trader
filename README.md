@@ -1,8 +1,15 @@
 # Machine Learning Project: Classic Trader
 
-## subt
+Introduction text
 
-### ssubt
+## Data
 
+describe data source and short summary of data
 
-try to predict prices of classic cars using machine learning
+## Models
+
+describe (briefly) models used
+
+## results
+
+describe (briefly) the results
