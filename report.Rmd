@@ -1,0 +1,64 @@
+---
+output:
+  pdf_document:
+    number_sections: true
+header-includes:
+    - \hypersetup{colorlinks = false,pdfborder={1 1 1}}
+    - \usepackage{float}
+---
+
+<!-- Setup -------------------------------------------------------------------->
+
+```{r setup, include=FALSE}
+# RMarkdown settings
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=5, fig.height=2.5, fig.align="center") 
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "")
+
+# required libraries
+# if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+# if(!require(knitr)) install.packages("knitr", repos = "http://cran.us.r-project.org")
+# if(!require(magrittr)) install.packages("magrittr", repos = "http://cran.us.r-project.org")
+# 
+# library(tidyverse)
+# library(knitr)
+# library(magrittr)
+
+# load data from r-script
+load("rmd-input.RData")
+```
+
+<!-- Title Page + TOC --------------------------------------------------------->
+\newpage
+\vspace*{4cm}
+\begin{center}
+{\Large Data Science: Capstone \\ (HarvardX PH125.9x)}
+\end{center}
+\vspace*{1.5cm}
+\begin{center}
+\thispagestyle{empty}
+{\LARGE \bf Capstone Project II}\\[1.5cm]
+{\Huge Classic Trader }\\[1.5cm]
+{\bf \Large Predict prices of classic cars}\\[1cm]
+{\Large January 2021}\\[1.5cm]
+{\large submitted by Bela Koch} \\[2.5cm]
+\end{center}
+
+\newpage
+\tableofcontents
+\newpage
+
+<!-- Report ------------------------------------------------------------------->
+
+# Introduction
+
+\newpage
+# Analysis: developing the model
+
+
+\newpage
+# Results: applying the model
+
+
+\newpage
+# Conclusion

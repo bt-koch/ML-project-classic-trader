@@ -25,6 +25,12 @@ library(dplyr)
 library(data.table)
 library(caret)
 
+# set seed (please uncomment depending on your R Version)
+# if using R 3.6 or later:
+set.seed(1, sample.kind = "Rounding")
+# if using R 3.5 or earlier:
+# set.seed(1)
+
 # functions
 get_vehicle_information <- function(link){
   page <- read_html(link)
@@ -66,8 +72,10 @@ data <- data.table()
 
 if(scrape_data){
   
+  # scrape data
   base_link <- "https://www.classic-trader.com/uk/cars/search?fulltext=&pagination%5Bpage%5D="
   
+  # get number of pages we want to scrape
   pages <- read_html(paste0(base_link, 1)) %>%
     html_nodes(".pager-text") %>%
     html_text() %>%
@@ -116,8 +124,9 @@ if(scrape_data){
 # -----------------------------------------------------------------------------.
 # 1.2 Data Wrangling ----
 # -----------------------------------------------------------------------------.
-saved <- copy(data)
+saved <- copy(data) # delete when script is finished!
 
+# filter relevant data and perform simple manipulations
 data <- data %>%
   select(
     ID = `ds2.Vehicle-ID:`,
@@ -138,22 +147,50 @@ data <- data %>%
     condition = `ds1.Condition category`
   ) %>%
   mutate(
+    # extract power in kw as integer
     power = as.integer(str_extract(power, pattern = "[\\.0-9e-]+")),
+    # extract mileage and convert to km as numeric
     mileage_num = gsub(",", "", mileage),
     mileage_num = as.integer(str_extract(mileage_num, pattern = "[\\.0-9e-]+")),
     mileage_unit = str_extract(mileage, pattern = "[a-zA-Z]+"),
     mileage_unit = ifelse(mileage_unit == "km", 1, 1.60934),
     mileage = mileage_num*mileage_unit,
+    # extract cubic capacity (ccm) as integer
     ccm = gsub(",", "", ccm),
     ccm = as.integer(str_extract(ccm, pattern = "[\\.0-9e-]+")),
-    condition = ifelse(is.na(condition), "normal", condition)
+    # assume condition = "Original" when there is no further information
+    condition = ifelse(is.na(condition), "Original", condition)
   ) %>%
   select(
+    # clean up
     -c(mileage_num, mileage_unit)
   )
 
-# missing data -> group by manufacturer+model and predict whats most expected
-# test
+# analyze missing data
+missing_data <- data %>%
+  sapply(function(x) sum(is.na(x))) %>%
+  data.frame(na_count = .) %>%
+  mutate(na_perc = na_count/nrow(data))
+
+# extract rows with at least one missing value
+index <- apply(data, 1, function(x) anyNA(x))
+rows_with_na <- data[index,]
+rows_without_na <- data[!index,]
+
+# remove columns with too much missing values
+data <- data %>% select(-c(mileage, color))
+
+# extract rows with at least one missing value
+index <- apply(data, 1, function(x) anyNA(x))
+rows_with_na <- data[index,]
+rows_without_na <- data[!index,]
+
+# data without any missing values
+data <- copy(rows_without_na)
+
+# save data for report
+save(list = c("data"), file = "rmd-input.RData")
+
 
 # -----------------------------------------------------------------------------.
 # 1.3 Create train, test and validation set ----
