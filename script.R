@@ -43,7 +43,7 @@ get_vehicle_information <- function(link){
   
   if(length(price) == 0){
     price <- page %>% html_nodes(".vehicle-ad-price-on-request") %>% html_text() %>% unique()
-    if(length(price == 1)){tab_3 <- data.table(price = -999)}
+    if(length(price == 1)){tab_3 <- data.table(price = NA)}
     
   } else {
     price <- price[str_detect(price, "EUR")] %>% gsub(",", "", .) %>% 
@@ -119,7 +119,13 @@ if(scrape_data){
   rm(url)
 }
 
+rm(scrape_data)
 
+# save csv for github upload
+# write.csv(data, "scraped-data.csv", row.names = F)
+# write following commands in terminal (check wd!):
+# git commit -m "message" filename
+# git push
 
 # -----------------------------------------------------------------------------.
 # 1.2 Data Wrangling ----
@@ -144,7 +150,8 @@ data <- data %>%
     drive = ds1.Drive,
     fuel = ds1.Fuel,
     color = `ds1.Exterior colour`,
-    condition = `ds1.Condition category`
+    condition = `ds1.Condition category`,
+    price = price
   ) %>%
   mutate(
     # extract power in kw as integer
@@ -159,7 +166,11 @@ data <- data %>%
     ccm = gsub(",", "", ccm),
     ccm = as.integer(str_extract(ccm, pattern = "[\\.0-9e-]+")),
     # assume condition = "Original" when there is no further information
-    condition = ifelse(is.na(condition), "Original", condition)
+    condition = ifelse(is.na(condition), "Original", condition),
+    # year as factor
+    year = as.factor(year),
+    # number of cylinders as factor
+    cylinders = as.factor(cylinders)
   ) %>%
   select(
     # clean up
@@ -192,20 +203,168 @@ data <- copy(rows_without_na)
 save(list = c("data"), file = "rmd-input.RData")
 
 
+# clean up
+rm(rows_with_na, rows_without_na, index)
+
+
 # -----------------------------------------------------------------------------.
-# 1.3 Create train, test and validation set ----
+# 1.3 Create development and validation set ----
 # -----------------------------------------------------------------------------.
 
-validation_index <- createDataPartition(data$ID, times = 1, p = 0.1, list = F)
+data <- data %>% select(-c(ID, model_name))
+data <- data[1:500,]
+
+validation_index <- createDataPartition(data$price, times = 1, p = 0.1, list = F)
 validation_set <- data[validation_index,]
 development_set <- data[-validation_index,]
 
-# =============================================================================.
-# 2. Develop the model ----
-# =============================================================================.
+rm(validation_index)
 
-# to do
 
 # =============================================================================.
-# 3. Apply the model ----
+# 2. Analyze the data ----
+# =============================================================================.
+
+# -----------------------------------------------------------------------------.
+# 2.1 Prices ----
+# -----------------------------------------------------------------------------.
+
+# distribution without any manipulations
+dens <- density(development_set$price)
+hist(development_set$price, probability = T, breaks = 25, ylim = c(0, max(dens$y)))
+lines(dens)
+rm(dens)
+
+# frequency of prices in price ranges
+seq <- c(
+  seq(0, 20000, by = 5000),
+  seq(25000, 225000, by = 25000),
+  seq(250000, 10^6, by = 250000),
+  Inf
+)
+prices <- cut(development_set$price, breaks = seq)
+barplot(table(prices))
+rm(seq, prices)
+
+# logarithmic manipulation
+hist(log(development_set$price), probability = T, breaks = 25)
+lines(density(log(development_set$price)))
+
+# -----------------------------------------------------------------------------.
+# 2.2 Manufacturer ----
+# -----------------------------------------------------------------------------.
+
+manufac <- table(development_set$manufacturer) %>% as.data.frame() %>% arrange(desc(Freq))
+
+manufac_top <- manufac[1:15,]$Freq
+names(manufac_top) <- manufac[1:15,]$Var1
+manufac_top <- sort(manufac_top)
+
+par(mar = c(5.1, 7, 4.1, 2.1))
+barplot(manufac_top, horiz = T, las=1)
+
+rm(manufac, manufac_top)
+
+# -----------------------------------------------------------------------------.
+# 2.3 Year ----
+# -----------------------------------------------------------------------------.
+
+barplot(table(development_set$year))
+
+# -----------------------------------------------------------------------------.
+# 2.3 Power ----
+# -----------------------------------------------------------------------------.
+
+# no manipulation
+dens <- density(development_set$power)
+hist(development_set$power, probability = T, breaks = 25, ylim = c(0, max(dens$y)))
+lines(dens)
+rm(dens)
+
+# log transformation
+hist(log(development_set$power), probability = T, breaks = 25)
+lines(density(log(development_set$power)))
+
+# square root transformation
+hist(development_set$power**(1/2), probability = T, breaks = 25)
+lines(density(development_set$power**(1/2)))
+
+# reciprocal transformation
+hist(1/development_set$power, probability = T, breaks = 25)
+lines(density(1/development_set$power))
+
+# box-cox transformation
+bxcx <- BoxCoxTrans(development_set$power)
+lambda_power <- bxcx$lambda
+hist((development_set$power^lambda_power - 1)/lambda_power, probability = T, breaks = 25)
+lines(density((development_set$power^lambda_power - 1)/lambda_power))
+
+# clean up
+rm(bxcx, lambda)
+
+# -----------------------------------------------------------------------------.
+# 2.3 ccm ----
+# -----------------------------------------------------------------------------.
+
+# no manipulation
+dens <- density(development_set$ccm)
+hist(development_set$ccm, probability = T, breaks = 25, ylim = c(0, max(dens$y)))
+lines(dens)
+
+# log transformation
+hist(log(development_set$ccm), probability = T, breaks = 25)
+lines(density(log(development_set$ccm)))
+
+# square root transformation
+hist(development_set$ccm**(1/2), probability = T, breaks = 25)
+lines(density(development_set$ccm**(1/2)))
+
+# reciprocal transformation
+hist(1/development_set$ccm, probability = T, breaks = 25)
+lines(density(1/development_set$ccm))
+
+# box-cox transformation
+bxcx <- BoxCoxTrans(development_set$ccm)
+lambda <- bxcx$lambda
+hist((development_set$ccm^lambda - 1)/lambda, probability = T, breaks = 25)
+lines(density((development_set$ccm^lambda - 1)/lambda))
+
+
+# -----------------------------------------------------------------------------.
+# 2.x manipulate features  ----
+# -----------------------------------------------------------------------------.
+
+development_set <- development_set %>%
+  mutate(
+    price = log(price),
+    power = (power^lambda_power - 1)/lambda_power
+  )
+
+validation_set <- validation_set %>%
+  mutate(
+    price = log(price),
+    power = (power^lambda_power - 1)/lambda_power
+  )
+
+# -----------------------------------------------------------------------------.
+# 2.x create train and test set ----
+# -----------------------------------------------------------------------------.
+
+test_index <- createDataPartition(development_set$price, times = 1, p = 0.1, list = F)
+test_set <- development_set[test_index,]
+train_set <- development_set[-test_index,]
+
+rm(test_index)
+
+# =============================================================================.
+# 3. Develop the model ----
+# =============================================================================.
+
+train_rf <- train(price ~ ., data = train_set, method = "rf")
+y_hat <- predict(train_rf, test_set)
+
+
+
+# =============================================================================.
+# 4. Apply the model ----
 # =============================================================================.
