@@ -18,12 +18,15 @@ if(!require(rvest)) install.packages("rvest", repos = "http://cran.us.r-project.
 if(!require(dplyr)) install.packages("dplyr", repos = "http://cran.us.r-project.org")
 if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+# if(!require(performance)) install.packages("performance", repos = "http://cran.us.r-project.org")
+# see (for performance i.e. check_model)
 
 library(tidyverse)
 library(rvest)
 library(dplyr)
 library(data.table)
 library(caret)
+# library(performance)
 
 # set seed (please uncomment depending on your R Version)
 # if using R 3.6 or later:
@@ -170,7 +173,23 @@ data <- data %>%
     # year as factor
     year = as.factor(year),
     # number of cylinders as factor
-    cylinders = as.factor(cylinders)
+    cylinders = as.factor(cylinders),
+    # manufacturer as factor
+    manufacturer = as.factor(manufacturer),
+    # model as factor
+    model = as.factor(model),
+    # body style as factor
+    body_style = as.factor(body_style),
+    # steering as factor
+    steering = as.factor(steering),
+    # trainsmission as factor
+    transmission = as.factor(transmission),
+    # drive as factor
+    drive = as.factor(drive),
+    # fuel as factor
+    fuel = as.factor(fuel),
+    # condition as factor
+    condition = as.factor(condition)
   ) %>%
   select(
     # clean up
@@ -212,7 +231,7 @@ rm(rows_with_na, rows_without_na, index)
 # -----------------------------------------------------------------------------.
 
 data <- data %>% select(-c(ID, model_name))
-data <- data[1:500,]
+# data <- data[1:500,]
 
 validation_index <- createDataPartition(data$price, times = 1, p = 0.1, list = F)
 validation_set <- data[validation_index,]
@@ -360,10 +379,56 @@ rm(test_index)
 # 3. Develop the model ----
 # =============================================================================.
 
+# -----------------------------------------------------------------------------.
+# 3.1 Linear Regression ----
+# -----------------------------------------------------------------------------.
+
+train_set_test <- copy(train_set)[1:500,]
+
+start_time <- Sys.time()
+cat("training lm started:", format(start_time, "%h.%m %H:%M"))
+
+train_lm <- lm(price ~ ., data = train_set)
+
+end_time <- Sys.time()
+end_time - start_time
+
+summary(train_lm)
+
+# check the default plots -> plot(train_lm, 1) ...
+
+# -----------------------------------------------------------------------------.
+# 3.2 Random Forrest ----
+# -----------------------------------------------------------------------------.
+
+start_time <- Sys.time()
+cat("training rf started:", format(start_time, "%h.%m %H:%M"))
+
 train_rf <- train(price ~ ., data = train_set, method = "rf")
-y_hat <- predict(train_rf, test_set)
+
+end_time <- Sys.time()
+end_time - start_time
+
+# y_hat <- predict(train_rf, test_set)
+print(train_rf)
+varImp(train_rf)
 
 
+# -----------------------------------------------------------------------------.
+# 3.3 K-nearest Neighbors ----
+# -----------------------------------------------------------------------------.
+
+start_time <- Sys.time()
+cat("training knn started:", format(start_time, "%h.%m %H:%M"))
+
+train_knn <- train(price ~ ., data = train_set, method = "knn")
+
+
+end_time <- Sys.time()
+end_time - start_time
+
+print(train_knn)
+varImp(train_knn)
 
 # =============================================================================.
 # 4. Apply the model ----
