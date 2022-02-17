@@ -6,6 +6,7 @@
 
 # Initialization ----
 rm(list=ls()); gc()
+start_time <- Sys.time()
 
 # user input:
 # set TRUE if you want to scrape data (takes some time)
@@ -136,20 +137,23 @@ if(scrape_data){
   cat(" download successful!")
 }
 
+# clean up
 rm(scrape_data)
 
+# TO DELETE WHEN SUBMITTING ++++++++++++++++++++++++++++++++++++++++++++++++++++
 # save csv for github upload
 # write.csv(data, "scraped-data.csv", row.names = F)
 # write following commands in terminal (check wd!):
 # git commit -m "message" filename
 # git push
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 # -----------------------------------------------------------------------------.
 # 1.2 Data Wrangling ----
 # -----------------------------------------------------------------------------.
 cat("\nPrepare data...")
 
-saved <- copy(data) # delete when script is finished!
+raw_data_save <- copy(data) # delete when script is finished!
 
 # filter relevant data and perform simple manipulations
 data <- data %>%
@@ -184,8 +188,6 @@ data <- data %>%
     # extract cubic capacity (ccm) as integer
     ccm = gsub(",", "", ccm),
     ccm = as.integer(str_extract(ccm, pattern = "[\\.0-9e-]+")),
-    # assume condition = "Original" when there is no further information
-    condition = ifelse(is.na(condition), "Original", condition),
     # create decade
     decade = (year-1)-(year-1)%%10,
     # year as factor
@@ -207,14 +209,14 @@ data <- data %>%
     # drive as factor
     drive = as.factor(drive),
     # fuel as factor
-    fuel = as.factor(fuel),
-    # condition as factor
-    condition = as.factor(condition)
+    fuel = as.factor(fuel)
   ) %>%
   select(
     # clean up
     -c(mileage_num, mileage_unit)
   )
+
+data_raw <- copy(data)
 
 # analyze missing data
 missing_data <- data %>%
@@ -227,8 +229,17 @@ index <- apply(data, 1, function(x) anyNA(x))
 rows_with_na <- data[index,]
 rows_without_na <- data[!index,]
 
-# remove columns with too much missing values
-data <- data %>% select(-c(mileage, color))
+# handle nas
+data <- data %>%
+  mutate(
+    # assume condition = "Original" when there is no further information
+    condition = ifelse(is.na(condition), "Original", condition),
+    condition = as.factor(condition)
+  ) %>%
+  select(
+    # remove columns with too much missing values
+    -c(mileage, color)
+  )
 
 # extract rows with at least one missing value
 index <- apply(data, 1, function(x) anyNA(x))
@@ -238,10 +249,6 @@ rows_without_na <- data[!index,]
 # data without any missing values
 data <- copy(rows_without_na)
 
-# save data for report
-save(list = c("data"), file = "rmd-input.RData")
-
-
 # clean up
 rm(rows_with_na, rows_without_na, index)
 
@@ -250,15 +257,12 @@ rm(rows_with_na, rows_without_na, index)
 # 1.3 Create development and validation set ----
 # -----------------------------------------------------------------------------.
 
-data <- data %>% select(-c(ID, model_name))
-# data <- data[1:500,]
-
+# create development and validation set
 validation_index <- createDataPartition(data$price, times = 1, p = 0.1, list = F)
 validation_set <- data[validation_index,]
 development_set <- data[-validation_index,]
 
 rm(validation_index)
-
 
 # =============================================================================.
 # 2. Analyze the data ----
@@ -285,7 +289,7 @@ prices <- cut(development_set$price, breaks = seq)
 barplot(table(prices))
 rm(seq, prices)
 
-# logarithmic manipulation
+# distribution with logarithmic transformation
 hist(log(development_set$price), probability = T, breaks = 25)
 lines(density(log(development_set$price)))
 
@@ -293,23 +297,31 @@ lines(density(log(development_set$price)))
 # 2.2 Manufacturer ----
 # -----------------------------------------------------------------------------.
 
-manufac <- table(development_set$manufacturer) %>% as.data.frame() %>% arrange(desc(Freq))
+# count number of vehicles per manufacturer
+manufac <- table(development_set$manufacturer) %>%
+  as.data.frame() %>%
+  arrange(desc(Freq))
 
+# get top manufacturers in data set
 manufac_top <- manufac[1:15,]$Freq
 names(manufac_top) <- manufac[1:15,]$Var1
 manufac_top <- sort(manufac_top)
 
+# make barplot of top manufacturers
 par(mar = c(5.1, 7, 4.1, 2.1))
 barplot(manufac_top, horiz = T, las=1)
 
+# top 53 manufacturers (for filtering later)
 manufac_top_53 <- manufac[1:53,]
 
+# clean up
 rm(manufac, manufac_top)
 
 # -----------------------------------------------------------------------------.
 # 2.3 Year ----
 # -----------------------------------------------------------------------------.
 
+# distribution of year
 barplot(table(development_set$year))
 
 # -----------------------------------------------------------------------------.
@@ -320,7 +332,6 @@ barplot(table(development_set$year))
 dens <- density(development_set$power)
 hist(development_set$power, probability = T, breaks = 25, ylim = c(0, max(dens$y)))
 lines(dens)
-rm(dens)
 
 # log transformation
 hist(log(development_set$power), probability = T, breaks = 25)
@@ -374,45 +385,76 @@ lines(density((development_set$ccm^lambda_ccm - 1)/lambda_ccm))
 rm(dens, bxcx)
 
 # -----------------------------------------------------------------------------.
-# 2.x manipulate features  ----
+# 2.4 manipulate features ----
 # -----------------------------------------------------------------------------.
 
-development_set <- development_set %>%
+# make copy of development set (for EDA in report)
+development_set_raw <- copy(development_set)
+
+# manipulate features and further filtering
+data <- data %>%
+  filter(
+    manufacturer %in% manufac_top_53$Var1 &
+      as.numeric(as.character(year)) > 1945 &
+      ccm >= 400 &
+      as.numeric(as.character(cylinders)) >= 2
+  ) %>%
   mutate(
     price = log(price),
-    power = (power^lambda_power - 1)/lambda_power
+    power = (power^lambda_power - 1)/lambda_power,
+    ccm   = (ccm^lambda_ccm - 1)/lambda_ccm
   ) %>%
-  filter(manufacturer %in% manufac_top_53$Var1) %>%
-  select(-c(model, year)) %>%
   mutate(
     manufacturer = as.factor(as.character(manufacturer))
-  )
-
-validation_set <- validation_set %>%
-  mutate(
-    price = log(price),
-    power = (power^lambda_power - 1)/lambda_power
   ) %>%
-  filter(manufacturer %in% manufac_top_53$Var1) %>%
-  select(-c(model, year)) %>%
-  mutate(
-    manufacturer = as.factor(as.character(manufacturer))
+  select(
+    -c(model, model_name, year)
   )
 
+# split data again (necessary due to manipulations)
+validation_index <- createDataPartition(data$price, times = 1, p = 0.1, list = F)
+validation_set <- data[validation_index,]
+development_set <- data[-validation_index,]
+
+# keep IDs to identify cars with biggest difference when predicting
+IDs_validation_set <- validation_set$ID
+validation_set$ID  <- NULL
+
+IDs_development_set <- development_set$ID
+development_set$ID  <- NULL
+
+rm(validation_index)
+
+
+# -----------------------------------------------------------------------------.
+# 2.5 one-hot encoding ----
+# -----------------------------------------------------------------------------.
+
+# perform one-hot encoding
+dummy <- dummyVars(" ~ .", data = development_set)
+development_set_one_hot <- data.table(predict(dummy, newdata = development_set))
+
+dummy <- dummyVars(" ~ .", data = validation_set)
+validation_set_one_hot <- data.table(predict(dummy, newdata = validation_set))
+  
 # clean up
-rm(lambda_power, lambda_ccm)
+rm(dummy)
 
 # -----------------------------------------------------------------------------.
-# 2.x create train and test set ----
+# 2.6 create train and test set ----
 # -----------------------------------------------------------------------------.
 
+# create train and test set
 test_index <- createDataPartition(development_set$price, times = 1, p = 0.1, list = F)
 test_set <- development_set[test_index,]
 train_set <- development_set[-test_index,]
+test_set_one_hot <- development_set_one_hot[test_index,]
+train_set_one_hot <- development_set_one_hot[-test_index,]
 
+# clean up
 rm(test_index)
 
-cat(" done!")
+cat(" done!") # data preparation finished
 
 # =============================================================================.
 # 3. Develop the model ----
@@ -441,6 +483,7 @@ summary(train_lm)
 # 3.1.3 predict ----
 # problem: when new factor in test set, prediction is not possible
 # -> remove observation with new factors
+# TO DO: CHECK WHATS NECESSARY AND WHATS NOT!! <------------------------------------
 test_set_lm <- copy(test_set)
 
 index <- which(!(test_set_lm$manufacturer %in% train_set$manufacturer))
@@ -451,10 +494,14 @@ test_set_lm$manufacturer[index] <- NA
 
 pred_lm <- predict(train_lm, test_set_lm)
 
+# convert back to normal scale
+pred_lm   <- exp(pred_lm)
+true_vals <- exp(test_set_lm$price)
+
 # 3.1.4 evaluate ----
-rmse <- RMSE(pred = pred_lm, obs = test_set_lm$price, na.rm = T)
-mae  <- MAE(pred = pred_lm, obs = test_set_lm$price, na.rm = T)
-mape <- mean(abs((test_set_lm$price-pred_lm)/test_set_lm$price), na.rm = T) * 100
+rmse <- RMSE(pred = pred_lm, obs = true_vals, na.rm = T)
+mae  <- MAE(pred = pred_lm, obs = true_vals, na.rm = T)
+mape <- mean(abs((true_vals-pred_lm)/true_vals), na.rm = T) * 100
 
 temp <- data.table(
   model = "linear regression",
@@ -474,16 +521,25 @@ rm(start_time, end_time, index, rmse, mae, mape, temp)
 # -----------------------------------------------------------------------------.
 cat("\nTrain random forest...")
 
-# it takes too long!
-# https://stats.stackexchange.com/questions/37370/random-forest-computing-time-in-r
-
 # 3.2.1 train ----
 start_time <- Sys.time()
 cat("training rf started:", format(start_time, "%h.%m %H:%M"))
 
-# train_rf <- train(price ~ ., data = train_set, method = "rf")
+# tune parameters
+mtry <- tuneRF(x = train_set[names(train_set) != "price"],
+               y = train_set$price,
+               ntreeTry=500,
+               stepFactor=1.5,
+               improve=0.01)
+
+best.m <- mtry[mtry[,2] == min(mtry[,2]), 1]
+
+# train model
 train_rf <- randomForest(x = train_set[names(train_set) != "price"],
-                         y = train_set$price)
+                         y = train_set$price,
+                         mtry = best.m)
+
+hist(treesize(train_rf))
 
 end_time <- Sys.time()
 end_time - start_time
@@ -493,13 +549,16 @@ print(train_rf)
 varImp(train_rf)
 
 # 3.2.3 predict ----
-# remove new factors necessary?
 pred_rf <- predict(train_rf, test_set)
 
+# convert back to normal scale
+pred_rf   <- exp(pred_rf)
+true_vals <- exp(test_set$price)
+
 # 3.2.4 evaluate ----
-rmse <- RMSE(pred = pred_rf, obs = test_set$price, na.rm = T)
-mae  <- MAE(pred = pred_rf, obs = test_set$price, na.rm = T)
-mape <- mean(abs((test_set$price-pred_rf)/test_set$price), na.rm = T) * 100
+rmse <- RMSE(pred = pred_rf, obs = true_vals, na.rm = T)
+mae  <- MAE(pred = pred_rf, obs = true_vals, na.rm = T)
+mape <- mean(abs((true_vals-pred_rf)/true_vals), na.rm = T) * 100
 
 temp <- temp <- data.table(
   model = "random forest",
@@ -513,6 +572,7 @@ results <- rbind(results, temp)
 # clean up
 rm(start_time, end_time, rmse, mae, mape, temp)
 
+
 # -----------------------------------------------------------------------------.
 # 3.3 K-nearest Neighbors ----
 # -----------------------------------------------------------------------------.
@@ -522,7 +582,11 @@ cat("\nTrain knn...")
 start_time <- Sys.time()
 cat("training knn started:", format(start_time, "%h.%m %H:%M"))
 
-train_knn <- train(price ~ ., data = train_set, method = "knn")
+ctrl <- trainControl(method="repeatedcv",
+                     repeats = 3)
+
+train_knn <- train(price ~ ., data = train_set_one_hot, method = "knn",
+                   trControl = ctrl, tuneLength = 20) 
 
 end_time <- Sys.time()
 end_time - start_time
@@ -532,15 +596,19 @@ print(train_knn)
 varImp(train_knn)
 
 # 3.3.3 predict ----
-pred_knn <- predict(train_knn, test_set)
+pred_knn <- predict(train_knn, test_set_one_hot)
+
+# convert back to normal scale
+pred_knn  <- exp(pred_knn)
+true_vals <- exp(test_set$price)
 
 # 3.3.4 evaluate ----
-rmse <- RMSE(pred = pred_knn, obs = test_set$price, na.rm = T)
-mae  <- MAE(pred = pred_knn, obs = test_set$price, na.rm = T)
-mape <- mean(abs((test_set$price-pred_knn)/test_set$price), na.rm = T) * 100
+rmse <- RMSE(pred = pred_knn, obs = true_vals, na.rm = T)
+mae  <- MAE(pred = pred_knn, obs = true_vals, na.rm = T)
+mape <- mean(abs((true_vals-pred_knn)/true_vals), na.rm = T) * 100
 
 temp <- temp <- data.table(
-  model = "knn",
+  model = "K-nearest neighbors",
   RMSE = rmse,
   MAE = mae,
   MAPE = mape
@@ -551,6 +619,157 @@ results <- rbind(results, temp)
 # clean up
 rm(start_time, end_time, rmse, mae, mape, temp)
 
+
+# -----------------------------------------------------------------------------.
+# 3.4 Ensemble Model (averaging all models) ----
+# -----------------------------------------------------------------------------.
+cat("\nImplement the ensemble model...")
+
+# 3.4.1 predict (averaging) ----
+pred_avg <- data.table(lm = pred_lm, rf = pred_rf, knn = pred_knn)
+pred_avg <- rowMeans(pred_avg)
+
+true_vals <- exp(test_set$price)
+
+# 3.4.2 evaluate ----
+rmse <- RMSE(pred = pred_avg, obs = true_vals, na.rm = T)
+mae  <- MAE(pred = pred_avg, obs = true_vals, na.rm = T)
+mape <- mean(abs((true_vals-pred_avg)/true_vals), na.rm = T) * 100
+
+temp <- data.table(
+  model = "ensemble model (average)",
+  RMSE = rmse,
+  MAE = mae,
+  MAPE = mape
+)
+
+results <- rbind(results, temp)
+
+# clean up
+rm(rmse, mae, mape, temp)
+
+# -----------------------------------------------------------------------------.
+# 3.5 Ensemble Model (averaging all models) ----
+# -----------------------------------------------------------------------------.
+cat("\nImplement the ensemble model (without linear model)...")
+
+# 3.5.1 predict (averaging) ----
+pred_avg_2 <- data.table(rf = pred_rf, knn = pred_knn)
+pred_avg_2 <- rowMeans(pred_avg_2)
+
+true_vals <- exp(test_set$price)
+
+# 3.4.2 evaluate ----
+rmse <- RMSE(pred = pred_avg_2, obs = true_vals, na.rm = T)
+mae  <- MAE(pred = pred_avg_2, obs = true_vals, na.rm = T)
+mape <- mean(abs((true_vals-pred_avg_2)/true_vals), na.rm = T) * 100
+
+temp <- data.table(
+  model = "ensemble model (average, without linear model)",
+  RMSE = rmse,
+  MAE = mae,
+  MAPE = mape
+)
+
+results <- rbind(results, temp)
+
+# clean up
+rm(rmse, mae, mape, temp)
+
+
 # =============================================================================.
 # 4. Apply the model ----
 # =============================================================================.
+cat("\nApply the model...")
+
+# -----------------------------------------------------------------------------.
+# 4.1 apply random forest ----
+# -----------------------------------------------------------------------------.
+
+# 4.1.1 make predictions ----
+pred_final_rf <- predict(train_rf, validation_set)
+
+# convert back to normal scale
+pred_final_rf <- exp(pred_final_rf)
+true_vals  <- exp(validation_set$price)
+
+# 4.1.2 evaluate model ----
+rmse <- RMSE(pred = pred_final_rf, obs = true_vals, na.rm = T)
+mae  <- MAE(pred = pred_final_rf, obs = true_vals, na.rm = T)
+mape <- mean(abs((true_vals-pred_final_rf)/true_vals), na.rm = T) * 100
+
+temp <- data.table(
+  model = "random forest (validation set)",
+  RMSE = rmse,
+  MAE = mae,
+  MAPE = mape
+)
+
+results <- rbind(results, temp)
+
+analyze_results_final_rf <- data.table(
+  ID   = IDs_validation_set,
+  pred = pred_final_rf,
+  true = true_vals,
+  diff = abs(round((pred_final_rf-true_vals)/true_vals*100, 2))
+)
+
+hist(analyze_results_final_rf$diff, breaks = 50)
+
+# clean up
+rm(rmse, mae, mape, temp)
+
+# -----------------------------------------------------------------------------.
+# 4.2 apply ensemble model ----
+# -----------------------------------------------------------------------------.
+
+# 4.2.1 make predictions ----
+pred_final_knn <- predict(train_knn, validation_set_one_hot)
+
+# convert back to normal scale
+pred_final_knn <- exp(pred_final_knn)
+true_vals  <- exp(validation_set$price)
+
+# averaging
+pred_final_avg_2 <- data.table(rf = pred_final_rf, knn = pred_final_knn)
+pred_final_avg_2 <- rowMeans(pred_final_avg_2)
+
+# 4.2.2 evaluate model ----
+rmse <- RMSE(pred = pred_final_avg_2, obs = true_vals, na.rm = T)
+mae  <- MAE(pred = pred_final_avg_2, obs = true_vals, na.rm = T)
+mape <- mean(abs((true_vals-pred_final_avg_2)/true_vals), na.rm = T) * 100
+
+temp <- data.table(
+  model = "ensemble model without linear model (validation set)",
+  RMSE = rmse,
+  MAE = mae,
+  MAPE = mape
+)
+
+analyze_results_final_avg_2 <- data.table(
+  ID   = IDs_validation_set,
+  pred = pred_final_avg_2,
+  true = true_vals,
+  diff = abs(round((pred_final_avg_2-true_vals)/true_vals*100, 2))
+)
+
+hist(analyze_results_final_avg_2$diff, breaks = 60)
+
+results <- rbind(results, temp)
+
+
+# =============================================================================.
+# 5. Closing ----
+# =============================================================================.
+cat("\nSave data for report...")
+
+# save data for report
+save(list = c("data", "data_raw", "development_set_raw", "results", "missing_data",
+              "train_lm", "train_rf", "train_knn", "lambda_power", "lambda_ccm",
+              "mtry", "best.m", "analyze_results_final_rf", "analyze_results_final_avg_2"),
+     file = "rmd-input.RData")
+
+# final message and running time
+message("\nScript successfully finished")
+end_time <- Sys.time()
+end_time - start_time

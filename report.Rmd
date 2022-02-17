@@ -10,19 +10,23 @@ header-includes:
 <!-- Setup -------------------------------------------------------------------->
 
 ```{r setup, include=FALSE}
+options(scipen=999)
+
 # RMarkdown settings
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_chunk$set(fig.width=5, fig.height=2.5, fig.align="center") 
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.width=10, fig.height=5, fig.align="center") 
 knitr::opts_chunk$set(fig.pos = "H", out.extra = "")
 
 # required libraries
-# if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
-# if(!require(knitr)) install.packages("knitr", repos = "http://cran.us.r-project.org")
-# if(!require(magrittr)) install.packages("magrittr", repos = "http://cran.us.r-project.org")
-# 
-# library(tidyverse)
-# library(knitr)
-# library(magrittr)
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(knitr)) install.packages("knitr", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(randomForest)) install.packages("randomForest", repos = "http://cran.us.r-project.org")
+
+library(tidyverse)
+library(knitr)
+library(caret)
+library(randomForest)
 
 # load data from r-script
 load("rmd-input.RData")
@@ -39,8 +43,8 @@ load("rmd-input.RData")
 \thispagestyle{empty}
 {\LARGE \bf Capstone Project II}\\[1.5cm]
 {\Huge Classic Trader }\\[1.5cm]
-{\bf \Large Predict prices of classic cars}\\[1cm]
-{\Large January 2021}\\[1.5cm]
+{\bf \Large Predict prices of classic and exclusive cars}\\[1cm]
+{\Large February 2022}\\[1.5cm]
 {\large submitted by Bela Koch} \\[2.5cm]
 \end{center}
 
@@ -52,13 +56,509 @@ load("rmd-input.RData")
 
 # Introduction
 
-\newpage
-# Analysis: developing the model
+The goal of this exploratory machine learning project is, to understand the key
+drivers of the prices of classic and exclusive cars and to predict the prices
+using machine learning techniques. In a first step, the data used in the project
+is described and analysed. Then the relevant metrics are described, the process
+of training the models is addressed and the results of the algorithms with the
+test data and the validation data are shown. Finally, possible weaknesses and
+limitations are discussed and suggestions for improvement are made.
 
 
 \newpage
-# Results: applying the model
+# The data
+
+## Data Source
+
+The data used in this project was scraped from [classic-trader.com](https://www.classic-trader.com/) -
+a website which describes itself as the international marketplace for classic
+vehicles. All advertisements currently being placed are downloaded. If you intend
+to run the scraping process, please note that this will take some time.
+Alternatively (and as default in the corresponding script), the already scraped
+data is downloaded via the GitHub repository associated with this project.
+
+During the processing of this project, about 11 thousand observations could be
+obtained by scraping classic-trader.com. After data cleaning, about 8 thousand
+observations were available for the analysis. 
+
+## Overview of the data
+
+### Variables considered
+
+Variable     | Type    | Description
+------------ | ------- | -------------------------------------------------------
+ID           | integer | Identification number of vehicle from website
+manufacturer | Factor  | Manufacturer of vehicle (factorized)
+model        | Factor  | Model of vehicle (general, e.g. 3 Series; factorized)
+model_name   | Factor  | Model name of vehicle (more specific, e.g. 318is; factorized)
+year         | Factor  | Year of manufacture (factorized)
+decade       | Factor  | Decade of manufacture (factorized)
+mileage      | integer | Mileage, all converted to kilometers
+body_style   | Factor  | Body style of vehicle, e.g. sedan (factorized)
+color        | Factor  | Color of exterior body (factorized)
+power        | integer | Metric to indicate power produced by engine, measured in kilowatts
+ccm          | integer | Measure of engine displacement, measured in cubic centimeter
+cylinders    | integer | Number of cylinders
+steering     | Factor  | Placement of steering position, e.g. lefthand drive (factorized)
+transmission | Factor  | Type of transmission (factorized)
+drive        | Factor  | Type of drivetrain, e.g. rear-wheel drive (factorized)
+fuel         | Factor  | Fuel type (factorized)
+condition    | Factor  | Condition of vehicle (predefined classes, factorized)
+price        | numeric | Advertised price measured in euro
+
+### Missing data
+
+Following table shows the missing data. As we can see, the variables mileage,
+color, condition and price contain many missing values. 
+
+```{r nas}
+missing_data %>%
+  mutate(
+    na_perc = paste0(round(na_perc*100, 2), "%")
+  ) %>%
+  rename(`NAs absolute` = na_count) %>%
+  rename(`NAs relative` = na_perc) %>%
+  kable(align = c("r", "r"))
+
+```
+
+The missing values for
+the variable price are due to the fact that the vehicles can be advertised with
+"price on request". For the variable "condition", the category "original" is
+assumed in case of missing values, which describes the condition of the car as
+"unchanged, little signs of usage". After filling the missing values of
+"condition", the remaining observations which contain missing values were dropped.
+
+## Exploratory Data Analysis
+
+### Price
+
+The distribution of the variable to be estimated - the price - is analysed below.
+By means of visualisation of the distribution, a right skewed distribution of
+prices can be detected. Further checks are waived, since the right skewness is 
+clearly recognisable and is typical for variables with a natural lower limit 
+(i.e. zero) and a theoretical infinite upper limit.
+
+```{r distr_prices, fig.cap="Distribution of prices", fig.width=10, fig.height=5}
+par(mfrow = c(1,2))
+
+hist(development_set_raw$price, probability = T, breaks = 25,
+     ylim = c(0, max(density(development_set_raw$price)$y)),
+     main = "", xlab = "Price")
+lines(density(development_set_raw$price))
+
+max_filter <- 500000
+hist(development_set_raw$price[development_set_raw$price < max_filter], probability = T, breaks = 25,
+     ylim = c(0, max(density(development_set_raw$price[development_set_raw$price < max_filter])$y)),
+     main = "", xlab = "Price (zoomed)")
+lines(density(development_set_raw$price[development_set_raw$price < max_filter]))
+```
+
+While this is, for example, not a problem for decision trees, linear models,
+among others, are sensitive to outliers and skewed data. For this reason, a log
+transformation was applied to approximate the distribution of prices to the
+normal distribution. The graph below shows that the distribution of prices after
+applying the transformation indeed is more similar - although not perfect - to
+the normal distribution.
+
+```{r distr_log_prices, fig.cap="Distribution of prices (logarithmically transfomated)"}
+hist(log(development_set_raw$price), probability = T, breaks = 25,
+     main = "", xlab = "log(Price)")
+lines(density(log(development_set_raw$price)))
+```
+
+### Manufacturer
+
+The following graph shows the 15 manufacturers from which the most vehicles are
+advertised on classic-trader.com.
+
+```{r manufac, fig.cap="Top 15 manufacturers in dataset", fig.height=6}
+manufac <- table(development_set_raw$manufacturer) %>%
+  as.data.frame() %>%
+  arrange(desc(Freq))
+
+manufac_top <- manufac[1:15,]$Freq
+names(manufac_top) <- manufac[1:15,]$Var1
+manufac_top <- sort(manufac_top)
+
+par(mar = c(5.1, 7, 4.1, 2.1))
+barplot(manufac_top, horiz = T, las=1, xlab="Number of advertisments")
+```
+
+As can already be expected, the manufacturer of a vehicle is has an influence on
+the price of the corresponding vehicle. Thus, different manufacturers produce
+vehicles of different classes and thus also of different price ranges. The 
+distribution of prices thus differs between the different manufacturers, which
+can be seen in the following graph of the ten most represented manufacturers
+in the data set.
+
+```{r price_by_manufac, fig.cap="Prices by manufacturers", fig.height=6}
+manufac_top_boxplot <- development_set_raw %>%
+  filter(manufacturer %in% manufac[1:10,]$Var1)
+
+boxplot(manufac_top_boxplot$price~as.character(manufac_top_boxplot$manufacturer),
+        outline=F, xlab="Manufacturer (Top 10)", ylab="Price", cex.axis=0.75)
+```
+
+
+### Mileage
+
+In the used car market, the mileage of a car is an important indicator to determine
+the value and the condition of a vehicle Although it is not possible to draw direct
+conclusions about the condition and value of the vehicle, it nevertheless provides
+a tendency in this respect. In formal terms, correlation but not necessarily
+causality is expected between condition/value and mileage of a vehicle.
+
+The graph below shows the relationship between the price and the mileage of the
+cars advertised on classic-trader.com. Note that the graph only shows advertisements
+with a sales price of up to 1 million Euros so that the relationship is more 
+clearly visible.
+
+```{r plot_mileage, fig.cap="Mileage vs. Price (Price filtered $< 10^6$)"}
+plot(data_raw[data_raw$price < 10^6,]$mileage, data_raw[data_raw$price < 10^6,]$price,
+     xlab="Mileage", ylab="Price")
+```
+
+As we can see, there is a relationship between price and mileage which could be
+used as an indicator when estimating prices. Unfortunately, there are a lot of
+missing values for mileage in the data set, which is why this indicator is not
+considered in the analysis. For further studies however, it is recommended to
+include this indicator in the models.
+
+### Year
+
+In order to better understand the structure of the data, the distribution of the
+production years of the advertised vehicles are shown below. It is interesting to
+note that major historical events are discernible in the distribution of production
+years. For example, one sees a major slump in the period of World War 2 (1939-1945)
+and during the oil crisis of 1973. This can be relevant for this study insofar as
+car manufacturers are affected by what is happening in the world and in the global
+economy and therefore are factoring this into their business decisions when
+producing and developing new cars.
+
+```{r year, fig.cap="Year of manufacture"}
+barplot(table(development_set_raw$year), ylab="Count")
+```
+
+
+### Power and engine displacement
+
+Since both variables are integer, the distributions are analysed. In both cases,
+a tendency towards right skewness can be observed, although not as clearly as in
+the distribution of prices as seen before. The best result when trying to make 
+the distribution of the variables conform to the normal distribution was obtained
+with the box cox transformation. Although this transformation does not provide
+perfect results, an improvement in the performance of the models was nevertheless
+observed (due to overfitting? test systematically also with validation set!)
+
+```{r power_ccm_plots, fig.cap="Distribution of Power and ccm", fig.height=7.5}
+par(mfrow = c(2,2))
+# plot 1
+dens <- density(development_set_raw$power)
+hist(development_set_raw$power, probability = T, breaks = 25, ylim = c(0, max(dens$y)),
+     main="Power (no transformation)", xlab="Power")
+lines(dens)
+# plot 2
+hist((development_set_raw$power^lambda_power - 1)/lambda_power, probability = T, breaks = 25,
+     main="Power (box cox transformation)", xlab="Power")
+lines(density((development_set_raw$power^lambda_power - 1)/lambda_power))
+# plot 3
+dens <- density(development_set_raw$ccm)
+hist(development_set_raw$ccm, probability = T, breaks = 25, ylim = c(0, max(dens$y)),
+     main="ccm (no transformation)", xlab="ccm")
+lines(dens)
+# plot 4
+hist((development_set_raw$ccm^lambda_ccm - 1)/lambda_ccm, probability = T, breaks = 25,
+     main="ccm (box cox transformation)", xlab="ccm")
+lines(density((development_set_raw$ccm^lambda_ccm - 1)/lambda_ccm))
+```
+
+### One-hot encoding
+
+A large part of the variables considered in this project correspond to categorical
+variables. Since some algorithms cannot work with categorical data directly,
+the data was also encoded using the one-hot encoding method, since the categories
+have no ordinal relationship.
 
 
 \newpage
-# Conclusion
+# The model
+
+## Performance Metrics
+
+The performance metrics used in this project are briefly described below. Thereby.
+$\hat{y_n}$ corresponds to the predicted value of the dependent variable $y_n$ for
+the $n$th observation of $N$ observations.
+
+### Root Mean Squared Error (RMSE)
+
+Root Mean Squared Error calculates the average of the squared errors across all
+samples and takes the square root of the result. The RMSE provides an error
+measure in the same unit as the target variable, which makes RMSE as a performance
+metric directly interpretable. In general, a lower RMSE is better than a higher.
+The square avoids the
+errors of cancel each other out and penalizes larger errors more than smaller ones.
+
+$$
+\text{RMSE} = \sqrt{\frac{\sum^N_{n=1} (y_n - \hat{y}_n)^2}{N}}
+$$
+
+### Mean Absolute Error (MAE)
+
+The Mean Absolute Error calculates the absolute value of the errors (since the
+direction of the error is not relevant for this study) and takes the average of
+these values. This also prevents the errors of cancel each other out. In contrast
+to the RMSE, MAE does not penalise larger errors more severely. The error is also
+measured in the same unit as the target variable, which allows direct interpretation.
+Likewise, a lower value is better.
+
+$$
+\text{MAE} = \frac{\sum^N_{n=1} | y_n - \hat{y_n} |}{N} 
+$$
+
+### Mean Absolute Percentage Error (MAPE)
+
+The Mean Absolute Percentage Error is calculated similarly to the Mean Absolute
+Error, but the error is shown as percentage, which allos to understand how off
+a predcition is in relative terms. Here, too, a lower value is better.
+
+$$
+\text{MAPE} = \frac{1}{N} \sum^N_{n=1} \left| \frac{y_n - \hat{y}_n}{y_n} \right| 
+$$
+
+## Developing the model
+
+### Linear Regression
+
+First, a linear model is estimated using all predictor variables. To evaluate
+the model, the diagnostic plots are analysed.
+
+1. Residual vs Fitted:  
+   Since equally spread residuals around the horizontal line without distinct
+   patterns can be found, it is a good indication that there are no non-linear
+   relationships in the data that could not be captured by the linear model.
+   
+2. Normal Q-Q:  
+   With the Normal Q-Q plot it can be determined that the distribution of the
+   residuals corresponds to a distribution with "heavy tails", which indicates
+   that the data has more extreme values that would be expected if they would
+   truly came from a Normal distribution. The coefficient estimators should still
+   be quite reasonable, however, the prediction intervals are likely to be too
+   short (since they do not account for heavy tails), which is expected to worsen
+   the performance of the model.
+   
+3. Scale-Location:  
+   This plot shows that the residuals are equally spread along the ranges of
+   predictors, which indicates that the residuals has constant variance. If 
+   this would not be the case, less precise coefficients would be expected.
+   
+4. Residuals vs Leverage:  
+   Since no dashed red lines are visible on the graph which would correspond to
+   a Cook's distance of 0.5 and 1, none of the observations lay outside these
+   boundaries and therefore no action is required.
+   
+
+```{r lm_plots, fig.cap="Linear model", fig.height=10, warning=F}
+par(mfrow=c(2,2))
+plot(train_lm, 1)
+plot(train_lm, 2)
+plot(train_lm, 3)
+plot(train_lm, 5)
+```
+
+When applying the linear model on the training set, following measures are 
+reached:
+
+```{r lm_results}
+results[1,] %>%
+  kable()
+```
+
+### Random Forest
+
+Second, a random forest algorithm is trained. In a first step, the best value of
+mtry - the number of variables randomly sampled as candidates at each split -
+is sought. The best value of mtry minimized the minimum out of bag (OBB) error.
+
+
+```{r rf_tune, fig.cap="Random Forest Tuning"}
+plot(mtry, type = "b")
+```
+
+Next, the random forest algorithm is trained with the previously determined best
+value of mtry (here: `r best.m``). In the following graph, the variable
+importance as measured by a Random Forest can be seen.
+
+```{r rf_plot, fig.cap="Variable Importance of Random Forest"}
+varImpPlot(train_rf, main="Variable Importance")
+```
+
+When applying the random forest algorithm on the training set, following measures
+are reached:
+
+```{r rf_results}
+results[1:2,] %>%
+  kable()
+```
+
+### K-nearest Neighbors
+
+RMSE was used to select the optimal model using the smallest value.
+The final value used for the model was k = 5.
+
+```{r tune_knn, fig.cap="Tune K-nearest neighbos"}
+plot(train_knn, col = "black")
+```
+
+Following table shows the variable importance of the K-nearest neighbors 
+algorithm
+
+```{r knn_plots, fig.cap="K-nearest neighbors"}
+varImp(train_knn)$importance %>%
+  arrange(desc(Overall)) %>%
+  top_n(n = 10, wt = Overall) %>%
+  kable()
+```
+
+When applying the K-nearest Neighbor algorithm on the training set, following
+measures are reached:
+
+```{r knn_results}
+results[1:3,] %>%
+  kable()
+```
+
+### Ensemble model (averaging)
+
+Finally, the individual predictions of the different models are combined with the
+calculation of the arithmetic mean to form a single prediction.
+
+When applying the ensemble model on the training set, following measures are reached:
+
+```{r ens_results}
+results[1:5,] %>%
+  kable()
+```
+
+## Applying the model
+
+As must be noted with the development set, the models unfortunately do not provide
+reliable predictions of the prices. Nevertheless, the models are applied with the
+validation set in order to further analyse the results.
+
+Since the random forest algorithm outperforms the other models in both MAE and
+MAPE and the ensemble model that does not include the linear model outperforms
+the other models in RMSE, these two models are used with the validation set.
+With the data from the validation set, following results are obtained:
+
+```{r final_results}
+tail(results, 2) %>%
+  kable()
+```
+
+Following plot shows the distribution of the relative errors made by the two models:
+
+```{r plots_final, fig.cap="Distribution of relative errors"}
+par(mfrow = c(1,2))
+hist(analyze_results_final_rf$diff, breaks = 50, ylim = c(0, 200),
+     main="Random forest", xlab="Relative error")
+hist(analyze_results_final_avg_2$diff, breaks = 60, ylim = c(0, 200),
+     main="Ensemble model", xlab="Relative error")
+```
+
+As can be seen in the table and the plot, random forest seems to make better
+predictions - even if they are not really of much use. What is much more
+exciting to note is that both models make smaller relative errors in their
+predictions more often than larger errors. However, both models make few but
+very large relative errors, which significantly worsens the performance of the
+models.
+
+\newpage
+# Conclusion and Limitations
+
+## Data Quantity and Quality
+
+With around eight thousand observations, the analysis does not have very much
+data available for developing the models. With an increasing number of observations,
+the performance of the models could be expected to improve.
+
+As was noticed when applying the models with the validation set, very high relative
+errors are made in estimating prices for some observations, which is why some
+estimates with very high deviations were investigated. It was found that some of
+these (very) large errors are due to the assumption which was made when filling
+the NAs in the variable "condition" (i.e. filling NAs with "original").
+For example, an Austin-Healey 100/4 (BN1) was estimated to have a price of
+100'546.10 euros, whereas the vehicle was advertised with a price of 15'850 euros
+(this represents a relative discrepancy of 534.36 percent). At the time of
+writing, the average price of this vehicle was 78'266.61 euros (calculated
+across all conditions of vehicles), with some advertised vehicles being advertised
+with a price as high as 155'383 euros. The error of the estimate in relation to
+the average price corresponds to 28.47 percent, i.e. significantly lower than the
+534.36 percent. It was found that the observation with the very large difference
+was incorrectly attributed the condition "original", although the vehicle is merely
+a rusty bodyshell without an engine (remember: original condition describes the
+condition of the car as unchanged with little signs of usage)^[The advertisements
+can be found with the ID, for exmaple contained in the object "analyze_results_final_rf",
+using the search function on classic-trader.com].
+
+To improve the model, the assumption in filling the condition-variable has to
+be reconsidered. Using the data, which can also be obtained via the web-scraping
+process, one could also try, for example, to use text classification with the
+description of the vehicle (unsystematic text written by the seller) to infer the
+condition. With the available data, it would even be possible to attempt to
+classify the condition using image recognition.
+
+
+## Omitted Variable Bias
+
+The prices of vehicles, especially classic and exclusive vehicles, are often
+influenced by various other variables which are not taken into account in this
+project. Possible examples that could significantly influence prices of a
+vehicle and that were not taken into account in this project are successes in
+Motorsports of the vehicle model or the cult status of a vehicle, established
+for example through appearances in movies or through ownership by various
+celebrities.
+
+For example, the BMW E30 M3 (built from 1986-1991) is traded at 
+comparatively high prices, which is certainly partly due to the car's success in
+Motorsport and the reputation it has built up as a result: it is often entitled
+as the "most victorious racing car of all time" with 1'436 victories in just
+1'628 days.
+
+Another example is the VW Type 2 T1 (the "Hippie bus"), which is 
+traded at comparatively high prices (in some special versions in top condition,
+prices reach six figures). One possible reason for the high prices is that this
+vehicle is a symbol of the counterculture movement of the 1960s and stands for
+cultural openness and diversity. Even today, this vehicle conveys a certain
+attitude of life and stands for freedom, which is why the vehicle is also used
+as a symbol in modern advertisements, for example, precisely because of this
+characteristics.
+
+For the reasons mentioned, success in Motorsport, for example, could be introduced
+as a variable (e.g. number of wins as ratio of participation in races). More
+emotional factors, such as the cult status, are more difficult to capture.
+
+## Interaction Effects
+
+In addition, some features of a vehicle may have positive effect on the price
+of a vehicle in some cases and a negative effect in others. For example, the 
+impact of a right-hand drive is expected to be positive in the case of a Japanese
+vehicle, as this is (in many cases) due to the fact that the vehicle was built
+for the Japanese market, which may increase collector's value, whereas a right-hand
+drive might have a negative impact on the price of a German vehicle
+
+As another example, it would also be expected that the number of cylinders in an
+engine tends to increase the value of the corresponding vehicle. However, it is
+possible that for some vehicle models a smaller engine is more popular, for example
+due to reliability, which means that the model with the smaller engine is priced
+higher.
+
+A possible solution to this potential source of error could be the introduction
+of interaction-terms, for example between steering ($x_1$) and country of origin
+of the vehicle ($x_2$):
+
+$$
+\hat{y} = \alpha + \beta_1x_1 + \beta_2x_2 + \beta_3x_1x_2 + \epsilon
+$$
+
+
