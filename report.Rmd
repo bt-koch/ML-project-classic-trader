@@ -59,7 +59,7 @@ load("rmd-input.RData")
 The goal of this exploratory machine learning project is, to understand the key
 drivers of the prices of classic and exclusive cars and to predict the prices
 using machine learning techniques. In a first step, the data used in the project
-is described and analysed. Then the relevant metrics are described, the process
+is described and analysed. Then, the relevant metrics are described, the process
 of training the models is addressed and the results of the algorithms with the
 test data and the validation data are shown. Finally, possible weaknesses and
 limitations are discussed and suggestions for improvement are made.
@@ -185,7 +185,7 @@ par(mar = c(5.1, 7, 4.1, 2.1))
 barplot(manufac_top, horiz = T, las=1, xlab="Number of advertisments")
 ```
 
-As can already be expected, the manufacturer of a vehicle is has an influence on
+As can already be expected, the manufacturer of a vehicle has an influence on
 the price of the corresponding vehicle. Thus, different manufacturers produce
 vehicles of different classes and thus also of different price ranges. The 
 distribution of prices thus differs between the different manufacturers, which
@@ -204,15 +204,15 @@ boxplot(manufac_top_boxplot$price~as.character(manufac_top_boxplot$manufacturer)
 ### Mileage
 
 In the used car market, the mileage of a car is an important indicator to determine
-the value and the condition of a vehicle Although it is not possible to draw direct
+the value and the condition of a vehicle. Although it is not possible to draw direct
 conclusions about the condition and value of the vehicle, it nevertheless provides
 a tendency in this respect. In formal terms, correlation but not necessarily
 causality is expected between condition/value and mileage of a vehicle.
 
 The graph below shows the relationship between the price and the mileage of the
-cars advertised on classic-trader.com. Note that the graph only shows advertisements
-with a sales price of up to 1 million Euros so that the relationship is more 
-clearly visible.
+cars advertised on classic-trader.com. Note that the data for creating the 
+following plot was filtered to be under 1 million Euros so that the relationship
+is more clearly visible.
 
 ```{r plot_mileage, fig.cap="Mileage vs. Price (Price filtered $< 10^6$)"}
 plot(data_raw[data_raw$price < 10^6,]$mileage, data_raw[data_raw$price < 10^6,]$price,
@@ -249,7 +249,7 @@ the distribution of prices as seen before. The best result when trying to make
 the distribution of the variables conform to the normal distribution was obtained
 with the box cox transformation. Although this transformation does not provide
 perfect results, an improvement in the performance of the models was nevertheless
-observed (due to overfitting? test systematically also with validation set!)
+observed.
 
 ```{r power_ccm_plots, fig.cap="Distribution of Power and ccm", fig.height=7.5}
 par(mfrow = c(2,2))
@@ -287,7 +287,7 @@ have no ordinal relationship.
 ## Performance Metrics
 
 The performance metrics used in this project are briefly described below. Thereby.
-$\hat{y_n}$ corresponds to the predicted value of the dependent variable $y_n$ for
+$\hat{y}_n$ corresponds to the predicted value of the dependent variable $y_n$ for
 the $n$th observation of $N$ observations.
 
 ### Root Mean Squared Error (RMSE)
@@ -307,13 +307,13 @@ $$
 
 The Mean Absolute Error calculates the absolute value of the errors (since the
 direction of the error is not relevant for this study) and takes the average of
-these values. This also prevents the errors of cancel each other out. In contrast
-to the RMSE, MAE does not penalise larger errors more severely. The error is also
+these values. This also prevents the errors of cancelling each other out. In contrast
+to the RMSE, MAE does not penalize larger errors more severely. The error is also
 measured in the same unit as the target variable, which allows direct interpretation.
 Likewise, a lower value is better.
 
 $$
-\text{MAE} = \frac{\sum^N_{n=1} | y_n - \hat{y_n} |}{N} 
+\text{MAE} = \frac{\sum^N_{n=1} | y_n - \hat{y}_n |}{N} 
 $$
 
 ### Mean Absolute Percentage Error (MAPE)
@@ -386,7 +386,7 @@ plot(mtry, type = "b")
 ```
 
 Next, the random forest algorithm is trained with the previously determined best
-value of mtry (here: `r best.m``). In the following graph, the variable
+value of mtry (here: `r best.m`). In the following graph, the variable
 importance as measured by a Random Forest can be seen.
 
 ```{r rf_plot, fig.cap="Variable Importance of Random Forest"}
@@ -491,7 +491,7 @@ For example, an Austin-Healey 100/4 (BN1) was estimated to have a price of
 100'546.10 euros, whereas the vehicle was advertised with a price of 15'850 euros
 (this represents a relative discrepancy of 534.36 percent). At the time of
 writing, the average price of this vehicle was 78'266.61 euros (calculated
-across all conditions of vehicles), with some advertised vehicles being advertised
+across all conditions of vehicles), with some vehicles being advertised
 with a price as high as 155'383 euros. The error of the estimate in relation to
 the average price corresponds to 28.47 percent, i.e. significantly lower than the
 534.36 percent. It was found that the observation with the very large difference
@@ -506,7 +506,8 @@ be reconsidered. Using the data, which can also be obtained via the web-scraping
 process, one could also try, for example, to use text classification with the
 description of the vehicle (unsystematic text written by the seller) to infer the
 condition. With the available data, it would even be possible to attempt to
-classify the condition using image recognition.
+classify the condition using image recognition with the pictures of the vehicles
+which are uploaded by the seller.
 
 
 ## Omitted Variable Bias
@@ -525,18 +526,18 @@ Motorsport and the reputation it has built up as a result: it is often entitled
 as the "most victorious racing car of all time" with 1'436 victories in just
 1'628 days.
 
-Another example is the VW Type 2 T1 (the "Hippie bus"), which is 
+Another example is the VW Type 2 T1 (the "Hippie bus" built from 1950-1967), which is 
 traded at comparatively high prices (in some special versions in top condition,
 prices reach six figures). One possible reason for the high prices is that this
 vehicle is a symbol of the counterculture movement of the 1960s and stands for
 cultural openness and diversity. Even today, this vehicle conveys a certain
 attitude of life and stands for freedom, which is why the vehicle is also used
 as a symbol in modern advertisements, for example, precisely because of this
-characteristics.
+characteristics. 
 
 For the reasons mentioned, success in Motorsport, for example, could be introduced
-as a variable (e.g. number of wins as ratio of participation in races). More
-emotional factors, such as the cult status, are more difficult to capture.
+as a variable (e.g. number of wins as ratio of participation in races).
+Emotional factors, such as the cult status, are more difficult to capture.
 
 ## Interaction Effects
 
