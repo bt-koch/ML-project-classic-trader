@@ -72,13 +72,13 @@ limitations are discussed and suggestions for improvement are made.
 
 The data used in this project was scraped from [classic-trader.com](https://www.classic-trader.com/) -
 a website which describes itself as the international marketplace for classic
-vehicles. All advertisements currently being placed are downloaded. If you intend
+vehicles. All advertisements currently being placed were downloaded. If you intend
 to run the scraping process, please note that this will take some time.
 Alternatively (and as default in the corresponding script), the already scraped
 data is downloaded via the GitHub repository associated with this project.
 
 During the processing of this project, about 11 thousand observations could be
-obtained by scraping classic-trader.com. After data cleaning, about 8 thousand
+obtained by scraping classic-trader.com. After data cleansing, about 8 thousand
 observations were available for the analysis. 
 
 ## Overview of the data
@@ -108,7 +108,7 @@ price        | numeric | Advertised price measured in euro
 
 ### Missing data
 
-Following table shows the missing data. As we can see, the variables mileage,
+The following table shows the missing data. As we can see, the variables mileage,
 color, condition and price contain many missing values. 
 
 ```{r nas}
@@ -154,8 +154,8 @@ hist(development_set_raw$price[development_set_raw$price < max_filter], probabil
 lines(density(development_set_raw$price[development_set_raw$price < max_filter]))
 ```
 
-While this is, for example, not a problem for decision trees, linear models,
-among others, are sensitive to outliers and skewed data. For this reason, a log
+While this is, for example, not a problem for decision trees, linear models
+(among others) are sensitive to outliers and skewed data. For this reason, a log
 transformation was applied to approximate the distribution of prices to the
 normal distribution. The graph below shows that the distribution of prices after
 applying the transformation indeed is more similar - although not perfect - to
@@ -319,8 +319,8 @@ $$
 ### Mean Absolute Percentage Error (MAPE)
 
 The Mean Absolute Percentage Error is calculated similarly to the Mean Absolute
-Error, but the error is shown as percentage, which allos to understand how off
-a predcition is in relative terms. Here, too, a lower value is better.
+Error, but the error is shown as percentage, which allows to understand how off
+a prediction is in relative terms. Here, too, a lower value is better.
 
 $$
 \text{MAPE} = \frac{1}{N} \sum^N_{n=1} \left| \frac{y_n - \hat{y}_n}{y_n} \right| 
@@ -341,19 +341,19 @@ the model, the diagnostic plots are analysed.
 2. Normal Q-Q:  
    With the Normal Q-Q plot it can be determined that the distribution of the
    residuals corresponds to a distribution with "heavy tails", which indicates
-   that the data has more extreme values that would be expected if they would
-   truly came from a Normal distribution. The coefficient estimators should still
-   be quite reasonable, however, the prediction intervals are likely to be too
-   short (since they do not account for heavy tails), which is expected to worsen
-   the performance of the model.
+   that the data has more extreme values than expected if they truly came from a 
+   Normal distribution. The coefficient estimators should still be quite reasonable,
+   however, the prediction intervals are likely to be too short (since they do 
+   not account for heavy tails), which is expected to worsen the performance of 
+   the model.
    
 3. Scale-Location:  
    This plot shows that the residuals are equally spread along the ranges of
-   predictors, which indicates that the residuals has constant variance. If 
-   this would not be the case, less precise coefficients would be expected.
+   predictors, which indicates that the residuals have a constant variance. If 
+   this was not the case, less precise coefficients would be expected.
    
 4. Residuals vs Leverage:  
-   Since no dashed red lines are visible on the graph which would correspond to
+   Since no dashed red lines are visible on the graph, which would correspond to
    a Cook's distance of 0.5 and 1, none of the observations lay outside these
    boundaries and therefore no action is required.
    
@@ -406,11 +406,11 @@ results[1:2,] %>%
 RMSE was used to select the optimal model using the smallest value.
 The final value used for the model was k = 5.
 
-```{r tune_knn, fig.cap="Tune K-nearest neighbos"}
+```{r tune_knn, fig.cap="Tune K-nearest neighbors"}
 plot(train_knn, col = "black")
 ```
 
-Following table shows the variable importance of the K-nearest neighbors 
+The following table shows the variable importance of the K-nearest neighbors 
 algorithm
 
 ```{r knn_plots, fig.cap="K-nearest neighbors"}
@@ -456,7 +456,7 @@ tail(results, 2) %>%
   kable()
 ```
 
-Following plot shows the distribution of the relative errors made by the two models:
+The following plot shows the distribution of the relative errors made by the two models:
 
 ```{r plots_final, fig.cap="Distribution of relative errors"}
 par(mfrow = c(1,2))
@@ -468,10 +468,10 @@ hist(analyze_results_final_avg_2$diff, breaks = 60, ylim = c(0, 200),
 
 As can be seen in the table and the plot, random forest seems to make better
 predictions - even if they are not really of much use. What is much more
-exciting to note is that both models make smaller relative errors in their
-predictions more often than larger errors. However, both models make few but
-very large relative errors, which significantly worsens the performance of the
-models.
+interesting to note is that the distribution of the errors made by both models
+are heavily skewed to the right. Thus, there are few estimates with very strong 
+deviations, which degrade the observed performance of the models very strongly.
+
 
 \newpage
 # Conclusion and Limitations
