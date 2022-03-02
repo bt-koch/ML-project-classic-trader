@@ -140,7 +140,7 @@ if(scrape_data){
 # clean up
 rm(scrape_data)
 
-# TO DELETE WHEN SUBMITTING ++++++++++++++++++++++++++++++++++++++++++++++++++++
+# notes for github upload ++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # save csv for github upload
 # write.csv(data, "scraped-data.csv", row.names = F)
 # write following commands in terminal (check wd!):
@@ -152,8 +152,6 @@ rm(scrape_data)
 # 1.2 Data Wrangling ----
 # -----------------------------------------------------------------------------.
 cat("\nPrepare data...")
-
-raw_data_save <- copy(data) # delete when script is finished!
 
 # filter relevant data and perform simple manipulations
 data <- data %>%
@@ -465,8 +463,6 @@ cat(" done!") # data preparation finished
 # -----------------------------------------------------------------------------.
 cat("\nTrain linear model...")
 
-# TO DELETE: check https://rpubs.com/j_fachrel/Linear-Regression-In-Used-Car-Price-Prediction <------
-
 # 3.1.1 train ---- 
 start_time <- Sys.time()
 cat("training lm started:", format(start_time, "%h.%m %H:%M"))
@@ -483,14 +479,9 @@ summary(train_lm)
 # 3.1.3 predict ----
 # problem: when new factor in test set, prediction is not possible
 # -> remove observation with new factors
-# TO DO: CHECK WHATS NECESSARY AND WHATS NOT!! <------------------------------------
 test_set_lm <- copy(test_set)
-
 index <- which(!(test_set_lm$manufacturer %in% train_set$manufacturer))
 test_set_lm$manufacturer[index] <- NA
-
-# index <- which(!(test_set_lm$model %in% train_set$model))
-# test_set_lm$model[index] <- NA
 
 pred_lm <- predict(train_lm, test_set_lm)
 
