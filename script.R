@@ -514,7 +514,7 @@ cat("\nTrain random forest...")
 
 # 3.2.1 train ----
 start_time <- Sys.time()
-cat("training rf started:", format(start_time, "%h.%m %H:%M"))
+cat("training rf started:", format(start_time, "%h.%m %H:%M\n"))
 
 # tune parameters
 mtry <- tuneRF(x = train_set[names(train_set) != "price"],
