@@ -19,7 +19,7 @@ To estimate the car prices, following models were trained:
 * K-nearest Neighbors
 * Ensemble model(s) (averaging)
 
-## results
+## Results
 
 Unfortunately, the model cannot provide reliable prediction of the car prices.
 Probable causes are data quantity, data quality, interaction effects and omitted
